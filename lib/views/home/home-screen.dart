@@ -17,6 +17,7 @@ import 'package:syphon/store/events/selectors.dart';
 import 'package:syphon/store/sync/selectors.dart';
 import 'package:syphon/views/navigation.dart';
 import 'package:syphon/views/widgets/appbars/appbar-search.dart';
+import 'package:syphon/views/widgets/avatars/avatar-badge.dart';
 import 'package:syphon/views/widgets/containers/fabs/fab-circle-expanding.dart';
 import 'package:syphon/views/widgets/containers/fabs/fab-bar-expanding.dart';
 import 'package:syphon/views/widgets/loader/index.dart';
@@ -76,6 +77,7 @@ class HomeState extends State<HomeScreen> {
     if (searching) {
       onToggleSearch();
     }
+
     if (!selectedChats.containsKey(room.id)) {
       setState(() {
         selectedChats.addAll({room.id: room});
@@ -329,6 +331,7 @@ class HomeState extends State<HomeScreen> {
 
   @protected
   Widget buildChatList(BuildContext context, _Props props) {
+    final width = MediaQuery.of(context).size.width;
     final rooms = props.rooms;
     final label = props.syncing ? Strings.labelSyncing : Strings.labelMessagesEmpty;
     final noSearchResults = searching && props.searchMessages.isEmpty && searchText.isNotEmpty;
@@ -375,7 +378,7 @@ class HomeState extends State<HomeScreen> {
         final messageLatest = latestMessage(messages, room: room, decrypted: decrypted);
         final preview = formatPreview(room: room, message: messageLatest);
         final chatName = room.name ?? '';
-        final newMessage = messageLatest != null &&
+        final isNewMessage = messageLatest != null &&
             room.lastRead < messageLatest.timestamp &&
             messageLatest.sender != props.currentUser.userId;
 
@@ -422,7 +425,7 @@ class HomeState extends State<HomeScreen> {
           }
 
           // display message as being 'unread'
-          if (newMessage) {
+          if (isNewMessage) {
             textStyle = textStyle.copyWith(
               color: Theme.of(context).textTheme.bodyText1!.color,
               fontWeight: FontWeight.w500,
@@ -430,171 +433,123 @@ class HomeState extends State<HomeScreen> {
           }
         }
 
+        final item = Container(
+          constraints: BoxConstraints(maxWidth: width),
+          child: Flex(
+            direction: Axis.horizontal,
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Container(
+                margin: const EdgeInsets.only(right: 12),
+                child: Stack(
+                  children: [
+                    Avatar(
+                      uri: room.avatarUri,
+                      size: Dimensions.avatarSizeMin,
+                      alt: formatRoomInitials(room: room),
+                      background: primaryColor,
+                    ),
+                    AvatarBadge(
+                      invite: props.roomTypeBadgesEnabled && room.invite,
+                      group: props.roomTypeBadgesEnabled && room.type == 'group',
+                      public: props.roomTypeBadgesEnabled && room.type == 'public',
+                      encryptionEnabled: !room.encryptionEnabled,
+                    ),
+                    Visibility(
+                      visible: isNewMessage,
+                      child: Positioned(
+                        top: 0,
+                        right: 0,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            width: Dimensions.badgeAvatarSizeSmall,
+                            height: Dimensions.badgeAvatarSizeSmall,
+                            color: Theme.of(context).accentColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                flex: 1,
+                fit: FlexFit.tight,
+                child: Flex(
+                  direction: Axis.vertical,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            chatName,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyText1,
+                          ),
+                        ),
+                        Text(
+                          formatTimestamp(lastUpdateMillis: room.lastUpdate),
+                          style: Theme.of(context).textTheme.subtitle2?.copyWith(
+                                fontWeight: FontWeight.w100,
+                                color: Theme.of(context).textTheme.bodyText1?.color,
+                              ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      preview,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.caption!.merge(
+                            textStyle,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+
+        final padding = EdgeInsets.symmetric(
+          vertical: Theme.of(context).textTheme.subtitle1!.fontSize!,
+        ).add(Dimensions.appPaddingHorizontal);
+
         // GestureDetector w/ animation
-        return InkWell(
+        final listItem = InkWell(
           onTap: () => onSelectChat(room, chatName),
           onLongPress: () => onToggleRoomOptions(room: room),
           child: Container(
+              decoration: BoxDecoration(
+                color: backgroundColor, // if selected, color seperately
+              ),
+              padding: padding,
+              child: item),
+        );
+
+        return Draggable(
+          feedback: Container(
+            width: width,
+            padding: padding,
+            child: item,
+          ),
+          childWhenDragging: Container(
             decoration: BoxDecoration(
               color: backgroundColor, // if selected, color seperately
             ),
-            padding: EdgeInsets.symmetric(
-              vertical: Theme.of(context).textTheme.subtitle1!.fontSize!,
-            ).add(Dimensions.appPaddingHorizontal),
-            child: Flex(
-              direction: Axis.horizontal,
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: <Widget>[
-                Container(
-                  margin: const EdgeInsets.only(right: 12),
-                  child: Stack(
-                    children: [
-                      Avatar(
-                        uri: room.avatarUri,
-                        size: Dimensions.avatarSizeMin,
-                        alt: formatRoomInitials(room: room),
-                        background: primaryColor,
-                      ),
-                      Visibility(
-                        visible: !room.encryptionEnabled,
-                        child: Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(
-                              Dimensions.badgeAvatarSize,
-                            ),
-                            child: Container(
-                              width: Dimensions.badgeAvatarSize,
-                              height: Dimensions.badgeAvatarSize,
-                              color: Theme.of(context).scaffoldBackgroundColor,
-                              child: Icon(
-                                Icons.lock_open,
-                                color: Theme.of(context).iconTheme.color,
-                                size: Dimensions.iconSizeMini,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Visibility(
-                        visible: props.roomTypeBadgesEnabled && room.invite,
-                        child: Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Container(
-                              width: Dimensions.badgeAvatarSize,
-                              height: Dimensions.badgeAvatarSize,
-                              color: Theme.of(context).scaffoldBackgroundColor,
-                              child: Icon(
-                                Icons.mail_outline,
-                                color: Theme.of(context).iconTheme.color,
-                                size: Dimensions.iconSizeMini,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Visibility(
-                        visible: newMessage,
-                        child: Positioned(
-                          top: 0,
-                          right: 0,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Container(
-                              width: Dimensions.badgeAvatarSizeSmall,
-                              height: Dimensions.badgeAvatarSizeSmall,
-                              color: Theme.of(context).accentColor,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Visibility(
-                        visible: props.roomTypeBadgesEnabled && room.type == 'group' && !room.invite,
-                        child: Positioned(
-                          right: 0,
-                          bottom: 0,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Container(
-                              width: Dimensions.badgeAvatarSize,
-                              height: Dimensions.badgeAvatarSize,
-                              color: Theme.of(context).scaffoldBackgroundColor,
-                              child: Icon(
-                                Icons.group,
-                                color: Theme.of(context).iconTheme.color,
-                                size: Dimensions.badgeAvatarSizeSmall,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Visibility(
-                        visible: props.roomTypeBadgesEnabled && room.type == 'public' && !room.invite,
-                        child: Positioned(
-                          right: 0,
-                          bottom: 0,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Container(
-                              width: Dimensions.badgeAvatarSize,
-                              height: Dimensions.badgeAvatarSize,
-                              color: Theme.of(context).scaffoldBackgroundColor,
-                              child: Icon(
-                                Icons.public,
-                                color: Theme.of(context).iconTheme.color,
-                                size: Dimensions.badgeAvatarSize,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Flexible(
-                  flex: 1,
-                  fit: FlexFit.tight,
-                  child: Flex(
-                    direction: Axis.vertical,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Expanded(
-                            child: Text(
-                              chatName,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodyText1,
-                            ),
-                          ),
-                          Text(
-                            formatTimestamp(lastUpdateMillis: room.lastUpdate),
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w100),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        preview,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.caption!.merge(
-                              textStyle,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            padding: padding,
+            child: Container(
+              width: width,
+              height: Dimensions.avatarSizeMin,
             ),
           ),
+          child: listItem,
         );
       },
     );
