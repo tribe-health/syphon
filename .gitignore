@@ -67,3 +67,4 @@ Flutter.podspec
 # example payloads
 *.example.json
 
+linux_test
